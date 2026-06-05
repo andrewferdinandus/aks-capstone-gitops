@@ -23,6 +23,9 @@ spec:
     - namespace: observability
       server: https://kubernetes.default.svc
 
+    - namespace: argocd
+      server: https://kubernetes.default.svc
+
   clusterResourceWhitelist:
     - group: ''
       kind: Namespace
