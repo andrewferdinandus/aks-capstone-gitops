@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: capstone-dev
+  labels:
+    environment: dev
+    project: aks-platform-capstone
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: capstone-qa
+  labels:
+    environment: qa
+    project: aks-platform-capstone
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: capstone-prod
+  labels:
+    environment: prod
+    project: aks-platform-capstone

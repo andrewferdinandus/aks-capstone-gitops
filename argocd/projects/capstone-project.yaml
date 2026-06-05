@@ -1,0 +1,34 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: capstone
+  namespace: argocd
+spec:
+  description: Enterprise AKS capstone application project
+
+  sourceRepos:
+    - 'https://github.com/andrewferdinandus/aks-capstone-gitops.git'
+
+  destinations:
+    - namespace: capstone-dev
+      server: https://kubernetes.default.svc
+    - namespace: capstone-qa
+      server: https://kubernetes.default.svc
+    - namespace: capstone-prod
+      server: https://kubernetes.default.svc
+    - namespace: platform-gateway
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+    - namespace: observability
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+    - group: gateway.networking.k8s.io
+      kind: GatewayClass
+
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
