@@ -4,6 +4,10 @@ resources:
   - ../../base
   - httproute-store-front.yaml
 
-commonLabels:
-  app.kubernetes.io/part-of: capstone-store
-  environment: dev
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: capstone-store
+      environment: dev
+
+patches:
+  - path: patch-store-front-service.yaml
