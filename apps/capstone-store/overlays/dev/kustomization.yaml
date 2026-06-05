@@ -1,2 +1,9 @@
+namespace: capstone-dev
+
 resources:
   - ../../base
+  - httproute-store-front.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: capstone-store
+  environment: dev
