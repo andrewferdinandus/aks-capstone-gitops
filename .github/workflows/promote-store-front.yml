@@ -1,0 +1,137 @@
+name: Promote store-front image
+
+"on":
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Target environment to promote to"
+        required: true
+        type: choice
+        options:
+          - qa
+          - prod
+      image_tag:
+        description: "Existing store-front image tag to promote"
+        required: true
+        default: "stage13-v1"
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    name: Promote store-front image to target environment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "[01] Checkout GitOps repo"
+        uses: actions/checkout@v4
+
+      - name: "[02] Validate promotion input"
+        run: |
+          set -euo pipefail
+
+          TARGET="${{ github.event.inputs.target_environment }}"
+          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+
+          if [ "${TARGET}" != "qa" ] && [ "${TARGET}" != "prod" ]; then
+            echo "Invalid target environment: ${TARGET}"
+            exit 1
+          fi
+
+          if [ -z "${IMAGE_TAG}" ]; then
+            echo "image_tag cannot be empty"
+            exit 1
+          fi
+
+          echo "Target environment: ${TARGET}"
+          echo "Image tag: ${IMAGE_TAG}"
+
+      - name: "[03] Update target overlay image tag"
+        run: |
+          set -euo pipefail
+
+          TARGET="${{ github.event.inputs.target_environment }}"
+          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+          FILE="apps/capstone-store/overlays/${TARGET}/kustomization.yaml"
+
+          python3 - <<PY
+from pathlib import Path
+
+file_path = Path("${FILE}")
+image_tag = "${IMAGE_TAG}"
+
+text = file_path.read_text()
+lines = text.splitlines()
+
+updated = []
+changed = False
+
+for line in lines:
+    if line.strip().startswith("newTag:"):
+        indent = line[:len(line) - len(line.lstrip())]
+        updated.append(f"{indent}newTag: {image_tag}")
+        changed = True
+    else:
+        updated.append(line)
+
+if not changed:
+    raise SystemExit(f"No newTag line found in {file_path}")
+
+file_path.write_text("\\n".join(updated) + "\\n")
+print(f"Updated {file_path} to tag {image_tag}")
+PY
+
+          echo "Updated image section:"
+          grep -n -A3 "images:" "${FILE}"
+
+      - name: "[04] Render target overlay with Kustomize"
+        run: |
+          set -euo pipefail
+
+          TARGET="${{ github.event.inputs.target_environment }}"
+
+          kubectl kustomize "apps/capstone-store/overlays/${TARGET}" > "/tmp/${TARGET}-rendered.yaml"
+
+          echo "Rendered store-front image:"
+          grep -n "image: .*store-front" "/tmp/${TARGET}-rendered.yaml"
+
+          echo "Rendered store-front service:"
+          grep -n "name: store-front" -A 12 "/tmp/${TARGET}-rendered.yaml" | head -25
+
+      - name: "[05] Commit and push promotion change"
+        run: |
+          set -euo pipefail
+
+          TARGET="${{ github.event.inputs.target_environment }}"
+          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+          FILE="apps/capstone-store/overlays/${TARGET}/kustomization.yaml"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "No promotion change to commit. Target already uses image tag ${IMAGE_TAG}."
+            exit 0
+          fi
+
+          git add "${FILE}"
+          git commit -m "Promote store-front ${IMAGE_TAG} to ${TARGET}"
+          git push
+
+      - name: "[06] Promotion summary"
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+# Store-front Promotion Summary
+
+| Item | Value |
+|---|---|
+| Target environment | ${{ github.event.inputs.target_environment }} |
+| Image tag | ${{ github.event.inputs.image_tag }} |
+| Image | store-front:${{ github.event.inputs.image_tag }} |
+| GitOps overlay | apps/capstone-store/overlays/${{ github.event.inputs.target_environment }} |
+
+Next:
+1. GitOps validation workflow should run automatically.
+2. Argo CD should sync the target environment.
+3. Verify the target environment workload image and health.
