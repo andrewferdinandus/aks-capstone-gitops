@@ -9,6 +9,8 @@ on:
       - main
   workflow_dispatch:
 
+# Manual trigger is enabled for testing
+
 jobs:
   validate:
     name: Validate YAML, Kustomize, and Kubernetes manifests
