@@ -1,2 +1,15 @@
+namespace: capstone-prod
+
 resources:
   - ../../base
+
+labels:
+  - includeSelectors: true
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/part-of: capstone-store
+      environment: prod
+
+images:
+  - name: acrakscapstoneae9954.azurecr.io/store-front
+    newTag: stage13-v1

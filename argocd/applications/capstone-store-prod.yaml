@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: capstone-store-prod
+  namespace: argocd
+spec:
+  project: capstone
+
+  source:
+    repoURL: https://github.com/andrewferdinandus/aks-capstone-gitops.git
+    targetRevision: main
+    path: apps/capstone-store/overlays/prod
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: capstone-prod
+
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

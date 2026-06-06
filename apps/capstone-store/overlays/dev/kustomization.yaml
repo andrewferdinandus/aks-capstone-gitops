@@ -13,3 +13,8 @@ labels:
 
 patches:
   - path: patch-store-front-service.yaml
+
+
+images:
+  - name: acrakscapstoneae9954.azurecr.io/store-front
+    newTag: stage13-v1
