@@ -48,39 +48,18 @@ jobs:
           echo "Image tag: ${IMAGE_TAG}"
 
       - name: "[03] Update target overlay image tag"
+        env:
+          TARGET: ${{ github.event.inputs.target_environment }}
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
         run: |
           set -euo pipefail
 
-          TARGET="${{ github.event.inputs.target_environment }}"
-          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           FILE="apps/capstone-store/overlays/${TARGET}/kustomization.yaml"
 
-          python3 - <<PY
-from pathlib import Path
+          echo "Updating ${FILE}"
+          echo "Promoting store-front image tag: ${IMAGE_TAG}"
 
-file_path = Path("${FILE}")
-image_tag = "${IMAGE_TAG}"
-
-text = file_path.read_text()
-lines = text.splitlines()
-
-updated = []
-changed = False
-
-for line in lines:
-    if line.strip().startswith("newTag:"):
-        indent = line[:len(line) - len(line.lstrip())]
-        updated.append(f"{indent}newTag: {image_tag}")
-        changed = True
-    else:
-        updated.append(line)
-
-if not changed:
-    raise SystemExit(f"No newTag line found in {file_path}")
-
-file_path.write_text("\\n".join(updated) + "\\n")
-print(f"Updated {file_path} to tag {image_tag}")
-PY
+          python3 -c 'from pathlib import Path; import os, re, sys; p=Path(os.environ["FILE"]); tag=os.environ["IMAGE_TAG"]; text=p.read_text(); new_text,count=re.subn(r"(?m)^(\\s*newTag:\\s*).+$", r"\\1"+tag, text, count=1); sys.exit("No newTag line found in "+str(p)) if count == 0 else p.write_text(new_text); print("Updated", p, "to tag", tag)'
 
           echo "Updated image section:"
           grep -n -A3 "images:" "${FILE}"
@@ -121,17 +100,18 @@ PY
 
       - name: "[06] Promotion summary"
         run: |
-          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-# Store-front Promotion Summary
-
-| Item | Value |
-|---|---|
-| Target environment | ${{ github.event.inputs.target_environment }} |
-| Image tag | ${{ github.event.inputs.image_tag }} |
-| Image | store-front:${{ github.event.inputs.image_tag }} |
-| GitOps overlay | apps/capstone-store/overlays/${{ github.event.inputs.target_environment }} |
-
-Next:
-1. GitOps validation workflow should run automatically.
-2. Argo CD should sync the target environment.
-3. Verify the target environment workload image and health.
+          {
+            echo "# Store-front Promotion Summary"
+            echo
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Target environment | ${{ github.event.inputs.target_environment }} |"
+            echo "| Image tag | ${{ github.event.inputs.image_tag }} |"
+            echo "| Image | store-front:${{ github.event.inputs.image_tag }} |"
+            echo "| GitOps overlay | apps/capstone-store/overlays/${{ github.event.inputs.target_environment }} |"
+            echo
+            echo "Next:"
+            echo "1. GitOps validation workflow should run automatically."
+            echo "2. Argo CD should sync the target environment."
+            echo "3. Verify the target environment workload image and health."
+          } >> "$GITHUB_STEP_SUMMARY"
