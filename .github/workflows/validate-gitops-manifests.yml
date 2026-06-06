@@ -1,6 +1,6 @@
 name: Validate GitOps manifests
 
-on:
+"on":
   pull_request:
     branches:
       - main
@@ -8,8 +8,14 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual validation run"
+        required: false
+        default: "manual validation"
 
-# Manual trigger is enabled for testing
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -20,53 +26,60 @@ jobs:
       - name: Checkout GitOps repo
         uses: actions/checkout@v4
 
-      - name: Install tools
+      - name: Install Python YAML parser
         run: |
-          set -e
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install pyyaml
 
-          echo "Installing kubeconform..."
+      - name: Install kubeconform
+        run: |
+          set -euo pipefail
+
           KUBECONFORM_VERSION="0.6.7"
+
           curl -sSL \
             "https://github.com/yannh/kubeconform/releases/download/v${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
             -o /tmp/kubeconform.tar.gz
 
           tar -xzf /tmp/kubeconform.tar.gz -C /tmp
           sudo mv /tmp/kubeconform /usr/local/bin/kubeconform
+
           kubeconform -v
 
       - name: Validate YAML syntax
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "Checking YAML files..."
           python3 - <<'PY'
-from pathlib import Path
-import sys
-import yaml
+          from pathlib import Path
+          import sys
+          import yaml
 
-failed = False
+          failed = False
 
-for path in sorted(Path(".").rglob("*.yaml")) + sorted(Path(".").rglob("*.yml")):
-    if ".git" in path.parts:
-        continue
+          paths = sorted(Path(".").rglob("*.yaml")) + sorted(Path(".").rglob("*.yml"))
 
-    try:
-        with path.open() as f:
-            list(yaml.safe_load_all(f))
-        print(f"OK: {path}")
-    except Exception as e:
-        print(f"ERROR: {path}: {e}")
-        failed = True
+          for path in paths:
+              if ".git" in path.parts:
+                  continue
 
-if failed:
-    sys.exit(1)
-PY
+              try:
+                  with path.open() as f:
+                      list(yaml.safe_load_all(f))
+                  print(f"OK: {path}")
+              except Exception as e:
+                  print(f"ERROR: {path}: {e}")
+                  failed = True
+
+          if failed:
+              sys.exit(1)
+          PY
 
       - name: Render capstone-store base with Kustomize
         run: |
-          set -e
+          set -euo pipefail
 
-          echo "Rendering apps/capstone-store/base..."
           kubectl kustomize apps/capstone-store/base > /tmp/capstone-store-base-rendered.yaml
 
           echo "Rendered manifest preview:"
@@ -74,7 +87,7 @@ PY
 
       - name: Validate rendered manifests with kubeconform
         run: |
-          set -e
+          set -euo pipefail
 
           kubeconform \
             -strict \
