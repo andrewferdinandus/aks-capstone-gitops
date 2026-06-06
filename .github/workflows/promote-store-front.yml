@@ -48,18 +48,22 @@ jobs:
           echo "Image tag: ${IMAGE_TAG}"
 
       - name: "[03] Update target overlay image tag"
-        env:
-          TARGET: ${{ github.event.inputs.target_environment }}
-          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
         run: |
           set -euo pipefail
 
+          TARGET="${{ github.event.inputs.target_environment }}"
+          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           FILE="apps/capstone-store/overlays/${TARGET}/kustomization.yaml"
 
           echo "Updating ${FILE}"
           echo "Promoting store-front image tag: ${IMAGE_TAG}"
 
-          python3 -c 'from pathlib import Path; import os, re, sys; p=Path(os.environ["FILE"]); tag=os.environ["IMAGE_TAG"]; text=p.read_text(); new_text,count=re.subn(r"(?m)^(\\s*newTag:\\s*).+$", r"\\1"+tag, text, count=1); sys.exit("No newTag line found in "+str(p)) if count == 0 else p.write_text(new_text); print("Updated", p, "to tag", tag)'
+          if ! grep -q "newTag:" "${FILE}"; then
+            echo "No newTag line found in ${FILE}"
+            exit 1
+          fi
+
+          sed -i "s|newTag: .*|newTag: ${IMAGE_TAG}|g" "${FILE}"
 
           echo "Updated image section:"
           grep -n -A3 "images:" "${FILE}"
