@@ -24,10 +24,10 @@ spec:
               name: mongodb
           resources:
             requests:
-              cpu: 5m
-              memory: 75Mi
+              cpu: 50m
+              memory: 128Mi
             limits:
-              cpu: 25m
+              cpu: 250m
               memory: 1024Mi
           livenessProbe:
             exec:
@@ -35,20 +35,20 @@ spec:
                 - mongo
                 - "--eval"
                 - db.runCommand('ping').ok
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
           readinessProbe:
             exec:
               command:
                 - mongo
                 - "--eval"
                 - db.runCommand('ping').ok
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 12
 ---
 apiVersion: v1
 kind: Service
