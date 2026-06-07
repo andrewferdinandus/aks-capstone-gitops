@@ -254,7 +254,7 @@ spec:
         "kubernetes.io/os": linux
       containers:
         - name: store-front
-          image: acrakscapstoneae9954.azurecr.io/store-front:stage18-ui-test-v1
+          image: acrakscapstoneae9954.azurecr.io/store-front:stage18-secure-flow-v1
           ports:
             - containerPort: 8080
               name: store-front
