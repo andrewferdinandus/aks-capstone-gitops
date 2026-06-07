@@ -1,48 +1,43 @@
 {
   "incident_id": "aiops-demo-service-no-endpoints-001",
-  "status": "Recovered",
+  "status": "Remediation PR Created",
   "severity": "Warning",
   "scenario": "Service has no endpoints",
-  "summary": "The aiops-demo Service had no endpoints because its selector did not match the running pod labels. AIOps created a GitHub PR, a human merged it, GitOps validation passed, Argo CD synced, and the Service recovered.",
+  "summary": "AIOps automatically checked the aiops-demo Service and updated this report.",
   "affected": {
     "namespace": "capstone-aiops-demo",
     "service": "aiops-demo",
     "deployment": "aiops-demo"
   },
   "evidence": {
-    "service_selector_before": {
-      "app": "wrong-aiops-demo"
+    "service_selector": {
+      "app": "wrong-aiops-demo",
+      "app.kubernetes.io/part-of": "capstone-aiops-demo",
+      "environment": "dev"
     },
-    "pod_label": {
-      "app": "aiops-demo"
+    "pod_template_labels": {
+      "app": "aiops-demo",
+      "app.kubernetes.io/part-of": "capstone-aiops-demo",
+      "environment": "dev"
     },
-    "endpoints_before": "none",
-    "endpoints_after": "10.50.0.83:80",
-    "endpoint_slice_after": {
-      "address_type": "IPv4",
-      "ports": [80],
-      "endpoints": ["10.50.0.83"]
-    }
+    "endpoints": "none"
   },
-  "root_cause": "The Kubernetes Service selector used app=wrong-aiops-demo, but the running pod label was app=aiops-demo. Because the selector did not match any ready pods, Kubernetes could not create Service endpoints.",
+  "root_cause": "The Service has no endpoints because the selector does not match the pod labels.",
   "decision": {
     "remediation_type": "GitOps PR",
     "risk": "Low",
-    "reason": "The issue was a deterministic manifest-level selector mismatch in an isolated demo namespace."
+    "reason": "Deterministic selector mismatch in an isolated demo namespace."
   },
   "action": {
-    "description": "AIOps created a GitHub PR to change the Service selector from app=wrong-aiops-demo to app=aiops-demo.",
-    "pr_url": "https://github.com/andrewferdinandus/aks-capstone-gitops/pull/1",
-    "human_approved": true,
-    "gitops_validation": "Passed",
-    "argocd_sync": "Synced / Healthy"
+    "description": "AIOps created a GitOps PR to fix the Service selector.",
+    "pr_url": "PR will be attached after PR creation",
+    "human_approved": false,
+    "gitops_validation": "Pending",
+    "argocd_sync": "Pending"
   },
   "recovery": {
-    "service_selector_after": {
-      "app": "aiops-demo"
-    },
-    "pod_status": "Running",
-    "service_endpoints": "10.50.0.83:80",
-    "status": "Recovered"
-  }
+    "status": "Pending",
+    "service_endpoints": "Pending PR merge and Argo CD sync"
+  },
+  "generated_at": "2026-06-07 04:35:38 UTC"
 }
