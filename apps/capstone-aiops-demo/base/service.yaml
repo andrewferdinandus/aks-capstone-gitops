@@ -5,7 +5,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: wrong-aiops-demo
+    app: aiops-demo
   ports:
     - name: http
       port: 80
