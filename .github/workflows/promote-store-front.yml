@@ -11,111 +11,257 @@ name: Promote store-front image
           - qa
           - prod
       image_tag:
-        description: "Existing store-front image tag to promote"
+        description: "store-front image tag to promote"
         required: true
-        default: "stage13-v1"
 
 permissions:
   contents: write
 
 jobs:
-  promote:
-    name: Promote store-front image to target environment
+  validate-input:
+    name: Validate Promotion Input
     runs-on: ubuntu-latest
 
-    steps:
-      - name: "[01] Checkout GitOps repo"
-        uses: actions/checkout@v4
+    outputs:
+      target_environment: ${{ steps.validate.outputs.target_environment }}
+      image_tag: ${{ steps.validate.outputs.image_tag }}
+      overlay_path: ${{ steps.validate.outputs.overlay_path }}
 
-      - name: "[02] Validate promotion input"
+    steps:
+      - name: Validate target environment and image tag
+        id: validate
         run: |
           set -euo pipefail
 
-          TARGET="${{ github.event.inputs.target_environment }}"
+          TARGET_ENVIRONMENT="${{ github.event.inputs.target_environment }}"
           IMAGE_TAG="${{ github.event.inputs.image_tag }}"
 
-          if [ "${TARGET}" != "qa" ] && [ "${TARGET}" != "prod" ]; then
-            echo "Invalid target environment: ${TARGET}"
+          if [[ "${TARGET_ENVIRONMENT}" != "qa" && "${TARGET_ENVIRONMENT}" != "prod" ]]; then
+            echo "Invalid target environment: ${TARGET_ENVIRONMENT}"
             exit 1
           fi
 
-          if [ -z "${IMAGE_TAG}" ]; then
+          if [[ -z "${IMAGE_TAG}" ]]; then
             echo "image_tag cannot be empty"
             exit 1
           fi
 
-          echo "Target environment: ${TARGET}"
-          echo "Image tag: ${IMAGE_TAG}"
+          OVERLAY_PATH="apps/capstone-store/overlays/${TARGET_ENVIRONMENT}"
 
-      - name: "[03] Update target overlay image tag"
+          echo "target_environment=${TARGET_ENVIRONMENT}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "overlay_path=${OVERLAY_PATH}" >> "$GITHUB_OUTPUT"
+
+          echo "Promotion input is valid"
+          echo "Target environment: ${TARGET_ENVIRONMENT}"
+          echo "Image tag: ${IMAGE_TAG}"
+          echo "Overlay path: ${OVERLAY_PATH}"
+
+  update-overlay:
+    name: Update Target Overlay
+    runs-on: ubuntu-latest
+    needs:
+      - validate-input
+
+    outputs:
+      changed: ${{ steps.update.outputs.changed }}
+
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+
+      - name: Update target overlay image tag
+        id: update
         run: |
           set -euo pipefail
 
-          TARGET="${{ github.event.inputs.target_environment }}"
-          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
-          FILE="apps/capstone-store/overlays/${TARGET}/kustomization.yaml"
+          OVERLAY_PATH="${{ needs.validate-input.outputs.overlay_path }}"
+          IMAGE_TAG="${{ needs.validate-input.outputs.image_tag }}"
+          KUSTOMIZATION_FILE="${OVERLAY_PATH}/kustomization.yaml"
 
-          echo "Updating ${FILE}"
-          echo "Promoting store-front image tag: ${IMAGE_TAG}"
-
-          if ! grep -q "newTag:" "${FILE}"; then
-            echo "No newTag line found in ${FILE}"
+          if [[ ! -f "${KUSTOMIZATION_FILE}" ]]; then
+            echo "Missing kustomization file: ${KUSTOMIZATION_FILE}"
             exit 1
           fi
 
-          sed -i "s|newTag: .*|newTag: ${IMAGE_TAG}|g" "${FILE}"
+          echo "Updating ${KUSTOMIZATION_FILE} to image tag ${IMAGE_TAG}"
 
-          echo "Updated image section:"
-          grep -n -A3 "images:" "${FILE}"
+          python3 - <<PY
+          from pathlib import Path
 
-      - name: "[04] Render target overlay with Kustomize"
+          path = Path("${KUSTOMIZATION_FILE}")
+          text = path.read_text()
+
+          lines = text.splitlines()
+          updated = []
+          changed = False
+
+          for line in lines:
+              stripped = line.strip()
+              if stripped.startswith("newTag:"):
+                  current = stripped.split(":", 1)[1].strip()
+                  if current != "${IMAGE_TAG}":
+                      indent = line[:len(line) - len(line.lstrip())]
+                      line = f"{indent}newTag: ${IMAGE_TAG}"
+                      changed = True
+              updated.append(line)
+
+          path.write_text("\\n".join(updated) + "\\n")
+
+          Path("/tmp/promotion_changed.txt").write_text("true" if changed else "false")
+          PY
+
+          CHANGED="$(cat /tmp/promotion_changed.txt)"
+
+          echo "changed=${CHANGED}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${CHANGED}" == "true" ]]; then
+            echo "Target overlay was updated"
+          else
+            echo "Target overlay already uses requested image tag"
+          fi
+
+      - name: Upload updated overlay artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-gitops-repo
+          path: .
+          include-hidden-files: true
+
+  render-overlay:
+    name: Render Target Overlay
+    runs-on: ubuntu-latest
+    needs:
+      - validate-input
+      - update-overlay
+
+    steps:
+      - name: Download updated GitOps repository
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-gitops-repo
+          path: .
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Render selected environment overlay
         run: |
           set -euo pipefail
 
-          TARGET="${{ github.event.inputs.target_environment }}"
+          OVERLAY_PATH="${{ needs.validate-input.outputs.overlay_path }}"
+          IMAGE_TAG="${{ needs.validate-input.outputs.image_tag }}"
+          TARGET_ENVIRONMENT="${{ needs.validate-input.outputs.target_environment }}"
 
-          kubectl kustomize "apps/capstone-store/overlays/${TARGET}" > "/tmp/${TARGET}-rendered.yaml"
+          echo "Rendering ${OVERLAY_PATH}"
 
-          echo "Rendered store-front image:"
-          grep -n "image: .*store-front" "/tmp/${TARGET}-rendered.yaml"
+          kubectl kustomize "${OVERLAY_PATH}" > /tmp/rendered-target-overlay.yaml
 
-          echo "Rendered store-front service:"
-          grep -n "name: store-front" -A 12 "/tmp/${TARGET}-rendered.yaml" | head -25
+          test -s /tmp/rendered-target-overlay.yaml
 
-      - name: "[05] Commit and push promotion change"
+          echo "Rendered resource count:"
+          grep -c '^kind:' /tmp/rendered-target-overlay.yaml || true
+
+          echo "Verifying rendered image tag..."
+          grep "store-front:${IMAGE_TAG}" /tmp/rendered-target-overlay.yaml
+
+          echo "Verifying namespace..."
+          grep "namespace: capstone-${TARGET_ENVIRONMENT}" /tmp/rendered-target-overlay.yaml | head
+
+          echo "Verifying store-front service is ClusterIP..."
+          awk '
+            $0 == "kind: Service" { in_service=1; service_block=$0 ORS; next }
+            in_service == 1 { service_block = service_block $0 ORS }
+            in_service == 1 && $0 == "---" {
+              if (service_block ~ /name: store-front/ && service_block ~ /type: ClusterIP/) {
+                found=1
+              }
+              in_service=0
+              service_block=""
+            }
+            END {
+              if (service_block ~ /name: store-front/ && service_block ~ /type: ClusterIP/) {
+                found=1
+              }
+              if (found != 1) {
+                print "store-front ClusterIP service not found"
+                exit 1
+              }
+              print "store-front service is ClusterIP"
+            }
+          ' /tmp/rendered-target-overlay.yaml
+
+  commit-promotion:
+    name: Commit Promotion Change
+    runs-on: ubuntu-latest
+    needs:
+      - validate-input
+      - update-overlay
+      - render-overlay
+
+    steps:
+      - name: Download updated GitOps repository
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-gitops-repo
+          path: .
+
+      - name: Commit and push promotion change
         run: |
           set -euo pipefail
 
-          TARGET="${{ github.event.inputs.target_environment }}"
-          IMAGE_TAG="${{ github.event.inputs.image_tag }}"
-          FILE="apps/capstone-store/overlays/${TARGET}/kustomization.yaml"
+          TARGET_ENVIRONMENT="${{ needs.validate-input.outputs.target_environment }}"
+          IMAGE_TAG="${{ needs.validate-input.outputs.image_tag }}"
+          CHANGED="${{ needs.update-overlay.outputs.changed }}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet; then
-            echo "No promotion change to commit. Target already uses image tag ${IMAGE_TAG}."
+          if [[ "${CHANGED}" != "true" ]]; then
+            echo "No promotion change to commit. Target environment already uses ${IMAGE_TAG}."
             exit 0
           fi
 
-          git add "${FILE}"
-          git commit -m "Promote store-front ${IMAGE_TAG} to ${TARGET}"
+          git status
+
+          git add "apps/capstone-store/overlays/${TARGET_ENVIRONMENT}/kustomization.yaml"
+
+          git commit -m "Promote store-front ${IMAGE_TAG} to ${TARGET_ENVIRONMENT}"
+
           git push
 
-      - name: "[06] Promotion summary"
+  promotion-summary:
+    name: Promotion Summary
+    runs-on: ubuntu-latest
+    needs:
+      - validate-input
+      - update-overlay
+      - render-overlay
+      - commit-promotion
+    if: always()
+
+    steps:
+      - name: Write promotion summary
         run: |
           {
             echo "# Store-front Promotion Summary"
             echo
             echo "| Item | Value |"
             echo "|---|---|"
-            echo "| Target environment | ${{ github.event.inputs.target_environment }} |"
-            echo "| Image tag | ${{ github.event.inputs.image_tag }} |"
-            echo "| Image | store-front:${{ github.event.inputs.image_tag }} |"
-            echo "| GitOps overlay | apps/capstone-store/overlays/${{ github.event.inputs.target_environment }} |"
+            echo "| Target environment | ${{ needs.validate-input.outputs.target_environment }} |"
+            echo "| Image tag | ${{ needs.validate-input.outputs.image_tag }} |"
+            echo "| Overlay path | ${{ needs.validate-input.outputs.overlay_path }} |"
+            echo "| Overlay changed | ${{ needs.update-overlay.outputs.changed }} |"
+            echo "| Input validation | ${{ needs.validate-input.result }} |"
+            echo "| Overlay update | ${{ needs.update-overlay.result }} |"
+            echo "| Overlay render | ${{ needs.render-overlay.result }} |"
+            echo "| Commit promotion | ${{ needs.commit-promotion.result }} |"
             echo
-            echo "Next:"
-            echo "1. GitOps validation workflow should run automatically."
-            echo "2. Argo CD should sync the target environment."
-            echo "3. Verify the target environment workload image and health."
+            echo "This workflow promotes an existing image tag by updating GitOps desired state."
+            echo
+            echo "Next expected actions:"
+            echo
+            echo "1. Validate GitOps manifests workflow runs after the promotion commit."
+            echo "2. Argo CD syncs the target environment."
+            echo "3. Verify the target Argo CD app is Synced and Healthy."
           } >> "$GITHUB_STEP_SUMMARY"
