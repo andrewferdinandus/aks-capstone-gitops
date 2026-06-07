@@ -1,9 +1,9 @@
 {
   "incident_id": "aiops-demo-service-no-endpoints-001",
-  "status": "Recovered",
-  "severity": "Warning",
+  "status": "No Active Incident",
+  "severity": "Info",
   "scenario": "Service has no endpoints",
-  "summary": "The aiops-demo Service had no endpoints because its selector did not match the running pod labels. AIOps created a GitHub PR, a human merged it, GitOps validation passed, Argo CD synced, and the Service recovered.",
+  "summary": "There is no active AIOps incident at the moment. The details below show the last resolved AIOps remediation example.",
   "affected": {
     "namespace": "capstone-aiops-demo",
     "service": "aiops-demo",
@@ -20,8 +20,12 @@
     "endpoints_after": "10.50.0.83:80",
     "endpoint_slice_after": {
       "address_type": "IPv4",
-      "ports": [80],
-      "endpoints": ["10.50.0.83"]
+      "ports": [
+        80
+      ],
+      "endpoints": [
+        "10.50.0.83"
+      ]
     }
   },
   "root_cause": "The Kubernetes Service selector used app=wrong-aiops-demo, but the running pod label was app=aiops-demo. Because the selector did not match any ready pods, Kubernetes could not create Service endpoints.",
