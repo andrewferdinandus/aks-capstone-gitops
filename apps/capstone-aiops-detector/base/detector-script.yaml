@@ -12,6 +12,7 @@ data:
     import ssl
     import urllib.request
     import urllib.error
+    import urllib.parse
     from datetime import datetime, timezone
 
     TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
@@ -165,7 +166,7 @@ data:
             method="POST",
             payload={
                 "title": "AIOps auto-fix aiops-demo service selector",
-                "head": GITHUB_FIX_BRANCH,
+                "head": f"{GITHUB_REPO.split('/')[0]}:{GITHUB_FIX_BRANCH}",
                 "base": GITHUB_BASE_BRANCH,
                 "body": (
                     "## AIOps automated remediation PR\n\n"
@@ -340,8 +341,13 @@ data:
                 print("GITHUB_TOKEN not set. Dashboard updated only. PR not created.")
                 return
 
+            update_github_pr_files(
+                selector,
+                labels,
+                "PR will be attached after PR creation",
+            )
+
             pr_url = create_pr()
-            update_github_pr_files(selector, labels, pr_url)
 
             pr_report = active_report
             pr_report["status"] = "Remediation PR Created"
