@@ -1,0 +1,11 @@
+namespace: capstone-aiops-demo
+
+resources:
+  - ../../base
+
+labels:
+  - includeSelectors: true
+    includeTemplates: true
+    pairs:
+      app.kubernetes.io/part-of: capstone-aiops-demo
+      environment: dev
