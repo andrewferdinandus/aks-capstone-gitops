@@ -1,4 +1,12 @@
 resources:
-  - configmap.yaml
   - deployment.yaml
   - service.yaml
+
+configMapGenerator:
+  - name: aiops-dashboard-content
+    files:
+      - index.html
+      - incident-report.json
+
+generatorOptions:
+  disableNameSuffixHash: true
