@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: aiops-demo-service-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+    app.kubernetes.io/part-of: capstone-aiops
+spec:
+  groups:
+    - name: capstone-aiops-demo.rules
+      rules:
+        - alert: AIOpsDemoServiceHasNoEndpoints
+          expr: |
+            kube_service_info{namespace="capstone-aiops-demo",service="aiops-demo"}
+            unless on(namespace)
+            kube_endpointslice_endpoints{namespace="capstone-aiops-demo",endpointslice=~"aiops-demo-.*",ready="true"}
+          for: 1m
+          labels:
+            severity: warning
+            project: capstone
+            component: aiops-demo
+          annotations:
+            summary: "AIOps demo Service has no ready endpoints"
+            description: "Service aiops-demo in namespace capstone-aiops-demo exists, but Prometheus cannot see any ready EndpointSlice endpoint for it. This may indicate a Service selector mismatch or no ready pods."
