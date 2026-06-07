@@ -18,6 +18,8 @@ spec:
       server: https://kubernetes.default.svc
     - namespace: capstone-aiops-demo
       server: https://kubernetes.default.svc
+    - namespace: capstone-aiops
+      server: https://kubernetes.default.svc
     - namespace: platform-gateway
       server: https://kubernetes.default.svc
     - namespace: monitoring

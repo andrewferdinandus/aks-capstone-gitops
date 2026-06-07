@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: capstone-aiops-dashboard
+  namespace: argocd
+spec:
+  project: capstone
+
+  source:
+    repoURL: https://github.com/andrewferdinandus/aks-capstone-gitops.git
+    targetRevision: main
+    path: apps/capstone-aiops-dashboard/overlays/dev
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: capstone-aiops
+
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
