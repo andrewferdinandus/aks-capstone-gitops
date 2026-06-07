@@ -89,6 +89,7 @@ jobs:
             "apps/capstone-store/overlays/dev" \
             "apps/capstone-store/overlays/qa" \
             "apps/capstone-store/overlays/prod" \
+            "apps/capstone-aiops-demo/overlays/dev" \
             > /tmp/kustomize-paths.txt
 
           echo "Kustomize paths selected for render:"
@@ -149,6 +150,7 @@ jobs:
             "apps/capstone-store/overlays/dev" \
             "apps/capstone-store/overlays/qa" \
             "apps/capstone-store/overlays/prod" \
+            "apps/capstone-aiops-demo/overlays/dev" \
             > /tmp/kustomize-paths.txt
 
           while read -r path; do
