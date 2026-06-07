@@ -1,4 +1,0 @@
-resources:
-  - detector-script.yaml
-  - rbac.yaml
-  - cronjob.yaml
