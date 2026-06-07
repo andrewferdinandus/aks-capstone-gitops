@@ -35,6 +35,10 @@ spec:
       kind: Namespace
     - group: gateway.networking.k8s.io
       kind: GatewayClass
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'
