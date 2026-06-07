@@ -32,6 +32,8 @@ spec:
     - group: gateway.networking.k8s.io
       kind: GatewayClass
 
+  - namespace: capstone-aiops-demo
+    server: https://kubernetes.default.svc
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'
