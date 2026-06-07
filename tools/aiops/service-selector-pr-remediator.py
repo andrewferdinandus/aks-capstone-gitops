@@ -9,6 +9,7 @@ NAMESPACE = "capstone-aiops-demo"
 SERVICE = "aiops-demo"
 DEPLOYMENT = "aiops-demo"
 GITOPS_FILE = Path("apps/capstone-aiops-demo/base/service.yaml")
+REPORT_FILE = Path("apps/capstone-aiops-dashboard/base/incident-report.json")
 BRANCH = "aiops/fix-aiops-demo-service-selector"
 
 def run(cmd, capture=True, check=True):
@@ -97,9 +98,70 @@ def main():
     print("\nPatched GitOps file")
     print(f"{GITOPS_FILE}: {old_line.strip()} -> {new_line.strip()}")
 
-    run(["git", "diff", "--", str(GITOPS_FILE)])
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    run(["git", "add", str(GITOPS_FILE)])
+    report = {
+        "incident_id": "aiops-demo-service-no-endpoints-001",
+        "status": "Remediation PR Created",
+        "severity": "Warning",
+        "scenario": "Service has no endpoints",
+        "summary": (
+            "The aiops-demo Service had no endpoints because its selector did not "
+            "match the running pod labels. AIOps collected evidence and created a "
+            "GitHub PR for human review."
+        ),
+        "affected": {
+            "namespace": NAMESPACE,
+            "service": SERVICE,
+            "deployment": DEPLOYMENT,
+        },
+        "evidence": {
+            "service_selector_before": selector,
+            "pod_template_labels": pod_template_labels,
+            "endpoints_before": "none",
+        },
+        "root_cause": (
+            f"The Kubernetes Service selector used app={wrong_app}, but the running "
+            f"pod label was app={correct_app}. Because the selector did not match any "
+            "ready pods, Kubernetes could not create Service endpoints."
+        ),
+        "decision": {
+            "remediation_type": "GitOps PR",
+            "risk": "Low",
+            "reason": (
+                "The issue was a deterministic manifest-level selector mismatch "
+                "in an isolated demo namespace."
+            ),
+        },
+        "action": {
+            "description": (
+                f"AIOps prepared a GitHub PR to change the Service selector from "
+                f"app={wrong_app} to app={correct_app}."
+            ),
+            "pr_url": "PR will be created by this run",
+            "human_approved": False,
+            "gitops_validation": "Pending",
+            "argocd_sync": "Pending",
+        },
+        "recovery": {
+            "service_selector_after": {
+                "app": correct_app,
+            },
+            "pod_status": "Running",
+            "service_endpoints": "Pending PR merge and Argo CD sync",
+            "status": "Pending",
+        },
+        "generated_at": timestamp,
+    }
+
+    REPORT_FILE.write_text(json.dumps(report, indent=2) + "\n")
+
+    print("\nUpdated AIOps dashboard incident report")
+    print(f"Report file: {REPORT_FILE}")
+
+    run(["git", "diff", "--", str(GITOPS_FILE), str(REPORT_FILE)])
+
+    run(["git", "add", str(GITOPS_FILE), str(REPORT_FILE)])
 
     commit_result = subprocess.run(
         ["git", "commit", "-m", "AIOps fix aiops-demo service selector"],
@@ -116,8 +178,6 @@ def main():
         return
 
     run(["git", "push", "-u", "origin", BRANCH, "--force"])
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     pr_body = f"""## AIOps remediation: Service has no endpoints
 
