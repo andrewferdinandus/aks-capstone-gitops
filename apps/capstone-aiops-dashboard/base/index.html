@@ -58,6 +58,16 @@
       color: #166534;
     }
 
+    .status-warning {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-critical {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
     pre {
       background: #111827;
       color: #e5e7eb;
@@ -80,19 +90,19 @@
 <body>
 <header>
   <h1>Capstone AIOps Incident Dashboard</h1>
-  <p>A separate UI for incident evidence, root cause, PR remediation, and recovery status.</p>
+  <p>Separate UI for active incident visibility, evidence, root cause, PR remediation, and recovery context.</p>
 </header>
 
 <main>
   <div class="card">
-    <div class="label">AIOps Incident Report</div>
+    <div class="label">Current AIOps Status</div>
     <div id="status" class="status">Loading...</div>
     <p id="summary" class="muted"></p>
   </div>
 
   <div class="grid">
     <div class="card">
-      <div class="label">Last Resolved Incident ID</div>
+      <div class="label">Alert / Incident</div>
       <div id="incidentId" class="value"></div>
     </div>
 
@@ -113,23 +123,23 @@
   </div>
 
   <div class="card">
-    <h2>Last Resolved Incident - Root Cause</h2>
+    <h2>Current Root Cause / Last Root Cause</h2>
     <p id="rootCause"></p>
   </div>
 
   <div class="card">
-    <h2>Last Resolved Incident - Evidence</h2>
+    <h2>Evidence</h2>
     <pre id="evidence"></pre>
   </div>
 
   <div class="card">
-    <h2>Last Resolved Incident - Action Taken</h2>
+    <h2>Action / Remediation</h2>
     <p id="action"></p>
     <p id="pr"></p>
   </div>
 
   <div class="card">
-    <h2>Last Resolved Incident - Recovery</h2>
+    <h2>Recovery</h2>
     <pre id="recovery"></pre>
   </div>
 
@@ -142,12 +152,75 @@
 </main>
 
 <script>
-async function loadReport() {
+const AIOPS_ALERT_NAME = 'AIOpsDemoServiceHasNoEndpoints';
+
+function setStatus(text, severity) {
+  const status = document.getElementById('status');
+  status.textContent = text;
+  status.className = 'status';
+
+  if (severity === 'warning') {
+    status.classList.add('status-warning');
+  }
+
+  if (severity === 'critical') {
+    status.classList.add('status-critical');
+  }
+}
+
+function renderActiveAlert(alert) {
+  const labels = alert.labels || {};
+  const annotations = alert.annotations || {};
+
+  setStatus('Active Incident Detected', labels.severity || 'warning');
+
+  document.getElementById('summary').textContent =
+    annotations.description || 'AIOps alert is currently firing.';
+
+  document.getElementById('incidentId').textContent =
+    labels.alertname || AIOPS_ALERT_NAME;
+
+  document.getElementById('severity').textContent =
+    labels.severity || 'warning';
+
+  document.getElementById('namespace').textContent =
+    labels.namespace || 'unknown';
+
+  document.getElementById('service').textContent =
+    labels.service || 'unknown';
+
+  document.getElementById('rootCause').textContent =
+    'Prometheus detected that the Service exists, but there are no ready EndpointSlice endpoints. This can happen when the Service selector does not match pod labels or when no ready pods are available.';
+
+  document.getElementById('evidence').textContent = JSON.stringify({
+    alert_state: alert.state,
+    active_at: alert.activeAt,
+    labels: labels,
+    annotations: annotations,
+    prometheus_value: alert.value
+  }, null, 2);
+
+  document.getElementById('action').textContent =
+    'Investigate the Service selector, pod labels, pod readiness, and Argo CD desired state. If this is a known safe selector mismatch, use the AIOps PR remediation workflow.';
+
+  document.getElementById('pr').innerHTML =
+    'PR: <span class="muted">Not created by dashboard. Remediation must follow the GitOps PR workflow.</span>';
+
+  document.getElementById('recovery').textContent = JSON.stringify({
+    status: 'Not Recovered',
+    expected_recovery: 'Service selector matches pod labels and EndpointSlice has at least one ready endpoint.'
+  }, null, 2);
+}
+
+async function renderLastResolvedReport() {
   const response = await fetch('/incident-report.json');
   const report = await response.json();
 
-  document.getElementById('status').textContent = report.status;
-  document.getElementById('summary').textContent = report.summary;
+  setStatus('No Active Incident', 'info');
+
+  document.getElementById('summary').textContent =
+    'Prometheus has no active AIOps demo endpoint alert. The details below show the last resolved remediation report.';
+
   document.getElementById('incidentId').textContent = report.incident_id;
   document.getElementById('severity').textContent = report.severity;
   document.getElementById('namespace').textContent = report.affected.namespace;
@@ -162,8 +235,26 @@ async function loadReport() {
   document.getElementById('recovery').textContent = JSON.stringify(report.recovery, null, 2);
 }
 
-loadReport().catch(error => {
-  document.getElementById('status').textContent = 'Error';
+async function loadDashboard() {
+  const response = await fetch('/prometheus/api/v1/alerts');
+  const payload = await response.json();
+
+  const alerts = payload.data && payload.data.alerts ? payload.data.alerts : [];
+  const activeAlert = alerts.find(alert =>
+    alert.labels &&
+    alert.labels.alertname === AIOPS_ALERT_NAME &&
+    (alert.state === 'firing' || alert.state === 'pending')
+  );
+
+  if (activeAlert) {
+    renderActiveAlert(activeAlert);
+  } else {
+    await renderLastResolvedReport();
+  }
+}
+
+loadDashboard().catch(error => {
+  setStatus('Dashboard Error', 'critical');
   document.getElementById('summary').textContent = error;
 });
 </script>
