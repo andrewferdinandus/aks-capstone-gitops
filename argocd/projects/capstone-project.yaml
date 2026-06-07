@@ -16,6 +16,8 @@ spec:
       server: https://kubernetes.default.svc
     - namespace: capstone-prod
       server: https://kubernetes.default.svc
+    - namespace: capstone-aiops-demo
+      server: https://kubernetes.default.svc
     - namespace: platform-gateway
       server: https://kubernetes.default.svc
     - namespace: monitoring
@@ -31,9 +33,6 @@ spec:
       kind: Namespace
     - group: gateway.networking.k8s.io
       kind: GatewayClass
-
-  - namespace: capstone-aiops-demo
-    server: https://kubernetes.default.svc
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'
