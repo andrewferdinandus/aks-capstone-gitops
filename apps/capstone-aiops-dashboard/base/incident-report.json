@@ -1,9 +1,9 @@
 {
   "incident_id": "aiops-demo-service-no-endpoints-001",
-  "status": "No Active Incident",
+  "status": "Last Resolved Incident",
   "severity": "Info",
   "scenario": "Service has no endpoints",
-  "summary": "There is no active AIOps incident at the moment. The details below show the last resolved AIOps remediation example.",
+  "summary": "This dashboard currently shows the last resolved AIOps remediation report. It does not automatically read live cluster incident state.",
   "affected": {
     "namespace": "capstone-aiops-demo",
     "service": "aiops-demo",
